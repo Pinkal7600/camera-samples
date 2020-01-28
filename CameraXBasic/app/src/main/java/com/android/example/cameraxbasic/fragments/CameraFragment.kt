@@ -31,12 +31,10 @@ import android.os.Build
 import android.os.Bundle
 import android.util.DisplayMetrics
 import android.util.Log
-import android.view.KeyEvent
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
+import android.view.*
 import android.webkit.MimeTypeMap
 import android.widget.ImageButton
+import android.widget.SeekBar
 import androidx.camera.core.AspectRatio
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
@@ -215,7 +213,7 @@ class CameraFragment : Fragment() {
         }
     }
 
-    @SuppressLint("MissingPermission")
+    @SuppressLint("MissingPermission", "ClickableViewAccessibility")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         container = view as ConstraintLayout
@@ -255,6 +253,21 @@ class CameraFragment : Fragment() {
                 }
             }
         }
+
+        val scaleGestureDetector = ScaleGestureDetector(context, listener)
+
+        viewFinder.setOnTouchListener { _, event ->
+            scaleGestureDetector.onTouchEvent(event)
+            return@setOnTouchListener true
+        }
+    }
+
+    val listener = object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+        override fun onScale(detector: ScaleGestureDetector): Boolean {
+            val scale = camera!!.cameraInfo.zoomRatio.value!! * detector.scaleFactor
+            camera!!.cameraControl.setZoomRatio(scale)
+            return true
+        }
     }
 
     /**
@@ -292,42 +305,42 @@ class CameraFragment : Fragment() {
 
             // Preview
             preview = Preview.Builder()
-                // We request aspect ratio but no resolution
-                .setTargetAspectRatio(screenAspectRatio)
-                // Set initial target rotation
-                .setTargetRotation(rotation)
-                .build()
+                    // We request aspect ratio but no resolution
+                    .setTargetAspectRatio(screenAspectRatio)
+                    // Set initial target rotation
+                    .setTargetRotation(rotation)
+                    .build()
 
             // Default PreviewSurfaceProvider
             preview?.setPreviewSurfaceProvider(viewFinder.previewSurfaceProvider)
 
             // ImageCapture
             imageCapture = ImageCapture.Builder()
-                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                // We request aspect ratio but no resolution to match preview config, but letting
-                // CameraX optimize for whatever specific resolution best fits requested capture mode
-                .setTargetAspectRatio(screenAspectRatio)
-                // Set initial target rotation, we will have to call this again if rotation changes
-                // during the lifecycle of this use case
-                .setTargetRotation(rotation)
-                .build()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    // We request aspect ratio but no resolution to match preview config, but letting
+                    // CameraX optimize for whatever specific resolution best fits requested capture mode
+                    .setTargetAspectRatio(screenAspectRatio)
+                    // Set initial target rotation, we will have to call this again if rotation changes
+                    // during the lifecycle of this use case
+                    .setTargetRotation(rotation)
+                    .build()
 
             // ImageAnalysis
             imageAnalyzer = ImageAnalysis.Builder()
-                // We request aspect ratio but no resolution
-                .setTargetAspectRatio(screenAspectRatio)
-                // Set initial target rotation, we will have to call this again if rotation changes
-                // during the lifecycle of this use case
-                .setTargetRotation(rotation)
-                .build()
-                // The analyzer can then be assigned to the instance
-                .also {
-                    it.setAnalyzer(mainExecutor, LuminosityAnalyzer {luma ->
-                        // Values returned from our analyzer are passed to the attached listener
-                        // We log image analysis results here - you should do something useful instead!
-                        Log.d(TAG, "Average luminosity: $luma")
-                    })
-                }
+                    // We request aspect ratio but no resolution
+                    .setTargetAspectRatio(screenAspectRatio)
+                    // Set initial target rotation, we will have to call this again if rotation changes
+                    // during the lifecycle of this use case
+                    .setTargetRotation(rotation)
+                    .build()
+                    // The analyzer can then be assigned to the instance
+                    .also {
+                        it.setAnalyzer(mainExecutor, LuminosityAnalyzer { luma ->
+                            // Values returned from our analyzer are passed to the attached listener
+                            // We log image analysis results here - you should do something useful instead!
+                            Log.d(TAG, "Average luminosity: $luma")
+                        })
+                    }
 
             // Must unbind the use-cases before rebinding them.
             cameraProvider.unbindAll()
@@ -336,9 +349,9 @@ class CameraFragment : Fragment() {
                 // A variable number of use-cases can be passed here -
                 // camera provides access to CameraControl & CameraInfo
                 camera = cameraProvider.bindToLifecycle(
-                    this as LifecycleOwner, cameraSelector, preview, imageCapture, imageAnalyzer
+                        this as LifecycleOwner, cameraSelector, preview, imageCapture, imageAnalyzer
                 )
-            } catch(exc: Exception) {
+            } catch (exc: Exception) {
                 Log.e(TAG, "Use case binding failed", exc)
             }
 
@@ -426,6 +439,17 @@ class CameraFragment : Fragment() {
                         CameraFragmentDirections.actionCameraToGallery(outputDirectory.absolutePath))
             }
         }
+
+
+        controls.findViewById<SeekBar>(R.id.zoomSeekBar).setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                camera!!.cameraControl.setLinearZoom(progress / 100.toFloat())
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
     }
 
 
